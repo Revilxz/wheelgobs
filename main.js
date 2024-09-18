@@ -6,7 +6,7 @@ const readline = require("readline");
 const { performance } = require("perf_hooks");
 const winston = require("winston");
 
-// Buat logger kustom menggunakan Winston
+// Logger setup using Winston
 const logger = winston.createLogger({
   level: "info",
   format: winston.format.combine(
@@ -32,23 +32,14 @@ const logger = winston.createLogger({
   transports: [new winston.transports.Console()],
 });
 
-class App {
+class ClickerBot {
   constructor() {
     this.headers = {
       Accept: "application/json, text/plain, */*",
       "Accept-Encoding": "gzip, deflate, br",
-      "Accept-Language": "vi-VN,vi;q=0.9,en-US;q=0.8,en;q=0.7",
-      "Content-Type": "application/x-www-form-urlencoded",
-      Origin: "https://clicker-api.crashgame247.io",
-      Referer: "https://clicker-api.crashgame247.io/",
-      "Sec-Ch-Ua":
-        '"Not_A Brand";v="8", "Chromium";v="120", "Google Chrome";v="120"',
-      "Sec-Ch-Ua-Mobile": "?1",
-      "Sec-Ch-Ua-Platform": '"Android"',
-      "Sec-Fetch-Mode": "cors",
-      "Sec-Fetch-Site": "same-site",
+      "Content-Type": "application/json",
       "User-Agent":
-        "Mozilla/5.0 (Linux; Android 6.0; Nexus 5 Build/MRA58N) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36",
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.3",
     };
     this.line = colors.white("-".repeat(42));
   }
@@ -66,7 +57,7 @@ class App {
           res = await axios.post(url, data, { headers });
         }
         if (typeof res.data !== "object") {
-          logger.error("Tidak menerima respons JSON yang valid!");
+          logger.error("Did not receive a valid JSON response!");
           attempts++;
           await this.sleep(2000);
           continue;
@@ -75,7 +66,7 @@ class App {
       } catch (error) {
         attempts++;
         logger.error(
-          `Kesalahan koneksi (Percobaan ${attempts}/${maxAttempts}): ${error.message}`
+          `Connection error (Attempt ${attempts}/${maxAttempts}): ${error.message}`
         );
 
         if (attempts < maxAttempts) {
@@ -85,72 +76,61 @@ class App {
         }
       }
     }
-    throw new Error("Tidak dapat terhubung setelah 3 percobaan");
+    throw new Error("Unable to connect after 3 attempts");
   }
 
   async login(tgData) {
     const url = "https://clicker-api.crashgame247.io/user/sync";
     const headers = { ...this.headers };
+
     try {
       const res = await this.http(url, headers, tgData);
       if (res.data) {
-        logger.info("Login berhasil!");
-        const { balance, energy, max_energy, access_token } = res.data;
-        logger.info(`Saldo: ${balance}`);
-        logger.info(`Energi: ${energy}/${max_energy}`);
-        return { access_token, energy };
+        logger.info("Login successful!");
+        const { access_token, energy, points_per_tap } = res.data;
+        logger.info(`Energy: ${energy}`);
+        logger.info(`Points per tap: ${points_per_tap}`);
+        return { access_token, energy, points_per_tap };
       } else {
-        logger.error("Login gagal!");
+        logger.error("Login failed!");
         return null;
       }
     } catch (error) {
-      logger.error(`Kesalahan: ${error.message}`);
+      logger.error(`Error: ${error.message}`);
       return null;
     }
   }
 
   async daily(access_token) {
     const url = "https://clicker-api.crashgame247.io/user/bonus/claim";
-    const headers = { ...this.headers, "X-Api-Key": access_token };
+    const headers = { ...this.headers, "Authorization": `Bearer ${access_token}` };
 
     try {
-      const checkRes = await this.http(url, headers);
-      if (checkRes.data && checkRes.data.has_available) {
-        logger.info("Check-in harian tersedia!");
-        const claimRes = await this.http(url, headers, "");
-        if (claimRes.data) {
-          logger.info("Check-in harian berhasil!");
-        } else {
-          logger.error("Check-in harian gagal!");
-        }
+      const res = await this.http(url, headers);
+      if (res.data) {
+        logger.info("Daily check-in successful!");
       } else {
-        logger.info("Check-in harian sudah diklaim hari ini.");
+        logger.error("Daily check-in failed!");
       }
     } catch (error) {
-      logger.error(
-        `Kesalahan saat memeriksa atau mengklaim bonus harian: ${error.message}`
-      );
+      logger.error(`Error when claiming daily bonus: ${error.message}`);
     }
   }
 
-  async tap(access_token, initialEnergy) {
+  async tap(access_token, initialEnergy, points_per_tap) {
     const url = "https://clicker-api.crashgame247.io/meta/clicker";
     const headers = {
       ...this.headers,
-      "X-Api-Key": access_token,
+      "Authorization": `Bearer ${access_token}`,
       "Content-Type": "application/json",
     };
     let energy = initialEnergy;
 
     try {
       while (energy >= 50) {
-        const randomEnergy = Math.floor(Math.random() * (50 - 10 + 1)) + 10;
-        let count = Math.floor((energy - randomEnergy) / 10); // Asumsikan points_per_tap = 10
-
+        const count = Math.floor(energy / points_per_tap);
         if (count <= 0) {
-          logger.info(
-            "Energi tidak cukup untuk melanjutkan tap, mengganti akun!"
-          );
+          logger.info("Not enough energy to continue tapping!");
           break;
         }
 
@@ -159,25 +139,22 @@ class App {
         const res = await this.http(url, headers, data);
         if (res.data) {
           const { balance, mined, newEnergy } = res.data;
-          logger.info(
-            `Taps: ${mined} | Saldo: ${balance} | Energi: ${newEnergy}`
-          );
+
+          logger.info(`Tapped ${mined} times | Balance: ${balance} | Energy: ${newEnergy}`);
 
           energy = newEnergy;
 
           if (energy < 50) {
-            logger.info(
-              "Energi terlalu rendah untuk melanjutkan tap, mengganti akun!"
-            );
+            logger.info("Energy too low to continue tapping!");
             break;
           }
         } else {
-          logger.error("Kesalahan, tidak dapat tap!");
+          logger.error("Error, unable to tap!");
           break;
         }
       }
     } catch (error) {
-      logger.error(`Kesalahan: ${error.message}`);
+      logger.error(`Error: ${error.message}`);
     }
   }
 
@@ -185,25 +162,12 @@ class App {
     return new Promise((resolve) => setTimeout(resolve, ms));
   }
 
-  async askQuestion(query) {
-    const rl = readline.createInterface({
-      input: process.stdin,
-      output: process.stdout,
-    });
-    return new Promise((resolve) =>
-      rl.question(query, (ans) => {
-        rl.close();
-        resolve(ans);
-      })
-    );
-  }
-
   async waitWithCountdown(seconds) {
     for (let i = seconds; i >= 0; i--) {
       readline.cursorTo(process.stdout, 0);
       process.stdout.write(
         colors.cyan(
-          `Selesai dengan semua akun, menunggu ${i} detik untuk melanjutkan loop`
+          `Completed all accounts, waiting ${i} seconds to continue the loop`
         )
       );
       await new Promise((resolve) => setTimeout(resolve, 1000));
@@ -220,20 +184,10 @@ class App {
       .filter(Boolean);
 
     if (data.length <= 0) {
-      logger.error("Tidak ada akun yang ditambahkan!");
+      logger.error("No accounts added!");
       process.exit();
     }
     console.log(this.line);
-
-    const buyCards = await this.askQuestion(
-      colors.cyan("Apakah Anda ingin membeli kartu baru? (y/n): ")
-    );
-    const buyCardsDecision = buyCards.toLowerCase() === "y";
-
-    const upgradeMyCards = await this.askQuestion(
-      colors.cyan("Apakah Anda ingin mengupgrade kartu? (y/n): ")
-    );
-    const upgradeMyCardsDecision = upgradeMyCards.toLowerCase() === "y";
 
     while (true) {
       const start = performance.now();
@@ -243,19 +197,19 @@ class App {
           decodeURIComponent(tgData.split("&")[1].split("=")[1])
         );
         const firstName = userData.first_name;
-        logger.info(`Akun ${index + 1}/${data.length} | ${firstName}`);
+        logger.info(`Account ${index + 1}/${data.length} | ${firstName}`);
 
         const loginData = await this.login(tgData);
         if (!loginData) {
-          logger.error("Login gagal, melanjutkan ke akun berikutnya.");
+          logger.error("Login failed, moving to the next account.");
           continue;
         }
 
-        const { access_token, energy } = loginData;
+        const { access_token, energy, points_per_tap } = loginData;
 
         if (access_token) {
           await this.daily(access_token);
-          await this.tap(access_token, energy);
+          await this.tap(access_token, energy, points_per_tap);
         }
 
         await this.sleep(5000);
@@ -269,13 +223,14 @@ class App {
 if (require.main === module) {
   process.on("SIGINT", () => {
     console.log(
-      colors.yellow("\nMematikan secara bersih dari SIGINT (Ctrl+C)")
+      colors.yellow("\nGracefully shutting down from SIGINT (Ctrl+C)")
     );
     process.exit();
   });
 
-  new App().main().catch((error) => {
-    logger.error(`Kesalahan dalam aplikasi: ${error.message}`);
+  new ClickerBot().main().catch((error) => {
+    logger.error(`Unhandled error in main execution: ${error.message}`);
+    logger.error(error.stack);
     process.exit(1);
   });
 }
