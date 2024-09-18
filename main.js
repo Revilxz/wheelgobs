@@ -80,7 +80,7 @@ class ClickerBot {
   }
 
   async login(tgData) {
-    const url = "https://clicker.crashgame247.io/authorize";
+    const url = "https://clicker.crashgame247.io/_app/immutable/chunks/auth";
     const headers = { ...this.headers };
 
     try {
