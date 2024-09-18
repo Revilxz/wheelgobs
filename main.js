@@ -80,7 +80,7 @@ class ClickerBot {
   }
 
   async login(tgData) {
-    const url = "https://clicker-api.crashgame247.io/user/sync";
+    const url = "https://clicker.crashgame247.io/";
     const headers = { ...this.headers };
 
     try {
