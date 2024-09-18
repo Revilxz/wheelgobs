@@ -89,8 +89,7 @@ class App {
   }
 
   async login(tgData) {
-    const url = "https://clicker.crashgame247.io/cdn-cgi/challenge-platform/h/b/jsd/r/8c52c1ff7acd3df4
-";
+    const url = "https://clicker-api.crashgame247.io/user/sync";
     const headers = { ...this.headers };
     try {
       const res = await this.http(url, headers, tgData);
