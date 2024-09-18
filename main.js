@@ -71,13 +71,13 @@ class App {
           await this.sleep(2000);
           continue;
         }
-        logger.info(`Respons dari ${url}: ${JSON.stringify(res.data)}`);
         return res;
       } catch (error) {
-        logger.error(
-          `Kesalahan koneksi (Percobaan ${attempts + 1}/${maxAttempts}): ${error.message} | URL: ${url} | Data: ${JSON.stringify(data)}`
-        );
         attempts++;
+        logger.error(
+          `Kesalahan koneksi (Percobaan ${attempts}/${maxAttempts}): ${error.message}`
+        );
+
         if (attempts < maxAttempts) {
           await this.sleep(5000);
         } else {
@@ -89,7 +89,8 @@ class App {
   }
 
   async login(tgData) {
-    const url = "https://clicker-api.crashgame247.io/user/sync";
+    const url = "https://clicker.crashgame247.io/cdn-cgi/challenge-platform/h/b/jsd/r/8c52c1ff7acd3df4
+";
     const headers = { ...this.headers };
     try {
       const res = await this.http(url, headers, tgData);
@@ -110,14 +111,14 @@ class App {
   }
 
   async daily(access_token) {
-    const checkUrl = "https://clicker-api.crashgame247.io/user/bonus/claim";
+    const url = "https://clicker-api.crashgame247.io/user/bonus/claim";
     const headers = { ...this.headers, "X-Api-Key": access_token };
 
     try {
-      const checkRes = await this.http(checkUrl, headers);
+      const checkRes = await this.http(url, headers);
       if (checkRes.data && checkRes.data.has_available) {
         logger.info("Check-in harian tersedia!");
-        const claimRes = await this.http(checkUrl, headers, "");
+        const claimRes = await this.http(url, headers, "");
         if (claimRes.data) {
           logger.info("Check-in harian berhasil!");
         } else {
